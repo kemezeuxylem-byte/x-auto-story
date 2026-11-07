@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>X-Auto Story Generator</title>
+<meta name="description" content="Answer 8 questions and name your characters, get a story from your AI tool, then copy it scene by scene for your voice-over.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#E8EFE9">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0E211E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="X-Auto Story">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;700&family=Gloock&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<style>
+/* Layout: one question at a time beside a sample of the finished story; the result is a voice-over edit: a timeline drawn to scale above one box per scene. */
+:root {
+  --paper: #E8EFE9;
+  --surface: #F7FAF6;
+  --ink: #12302B;
+  --muted: #4A635D;
+  --line: #BFD0C6;
+  --accent: #C4215F;
+  --on-accent: #FFFFFF;
+  --done: #1F7A5C;
+  --warn: #9A5B00;
+  --display: "Gloock", Georgia, "Times New Roman", serif;
+  --ui: "Figtree", "Segoe UI", Verdana, sans-serif;
+  --story: "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0E211E; --surface: #17302B; --ink: #E7F1EC; --muted: #A5BDB5; --line: #2F4C45;
+    --accent: #FF6F9F; --on-accent: #2A0614; --done: #5CCBA4; --warn: #E9B35F; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0E211E; --surface: #17302B; --ink: #E7F1EC; --muted: #A5BDB5; --line: #2F4C45;
+  --accent: #FF6F9F; --on-accent: #2A0614; --done: #5CCBA4; --warn: #E9B35F; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper); color: var(--ink); font: 400 1rem/1.5 var(--ui);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 56px;
+}
+button, input, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.app { max-width: 1120px; margin-inline: auto; display: grid; gap: 22px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.brand { font: 400 1.25rem/1.15 var(--display); margin: 0; }
+.top-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lang { display: inline-flex; border: 1.5px solid var(--ink); border-radius: 8px; overflow: hidden; }
+.lang button { background: transparent; border: 0; padding: .3rem .65rem; min-height: 36px; font-weight: 600; font-size: .85rem; cursor: pointer; }
+.lang button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.lang button:focus-visible { outline-offset: -3px; }
+.btn { border: 1.5px solid var(--ink); background: transparent; border-radius: 8px; padding: .5rem .9rem; min-height: 42px; font-weight: 600; cursor: pointer; }
+.btn:hover { background: var(--surface); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { background: var(--accent); filter: brightness(1.08); }
+.btn.quiet { border-color: var(--line); font-weight: 400; }
+a.btn { display: inline-flex; align-items: center; color: inherit; text-decoration: none; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.copied { background: var(--done); border-color: var(--done); color: var(--paper); }
+.link { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-size: .92rem; text-align: left; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 40px; align-items: start; }
+
+/* Question steps */
+.steps { display: flex; flex-wrap: wrap; gap: 5px; }
+.steps button { min-width: 34px; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: transparent; cursor: pointer; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.steps button.filled { background: var(--surface); border-color: var(--done); color: var(--done); font-weight: 700; }
+.steps button[aria-current="step"] { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 700; }
+.eyebrow { font-size: .78rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 22px 0 6px; }
+h1 { font: 400 clamp(1.8rem, 4vw, 2.7rem)/1.1 var(--display); margin: 0; text-wrap: balance; }
+.hint { color: var(--muted); margin: 10px 0 0; max-width: 58ch; }
+.answer { margin-top: 20px; display: grid; gap: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: .45rem .75rem; min-height: 42px; cursor: pointer; line-height: 1.2; text-align: left; }
+.chip:hover { border-color: var(--ink); }
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600; }
+.chip[aria-pressed="true"]::before { content: "\2713\00a0"; }
+.chip small { display: block; font-size: .78rem; opacity: .8; font-weight: 400; margin-top: 2px; font-variant-numeric: tabular-nums; }
+input[type="text"], textarea { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; }
+textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
+.lab { font-weight: 600; display: block; margin-bottom: 5px; }
+.nav { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin-top: 28px; }
+.error { color: var(--accent); font-weight: 600; margin: 12px 0 0; }
+.note { color: var(--muted); font-size: .92rem; margin: 0; }
+.char { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--line); align-items: end; }
+.char .wide { grid-column: 1 / 3; }
+.char .remove { grid-column: 3; grid-row: 1; align-self: end; min-height: 42px; }
+
+/* Scene boxes */
+.sample-tag { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--on-accent); background: var(--accent); padding: 2px 7px; border-radius: 4px; }
+.sample { display: grid; gap: 12px; }
+.sample h2 { font: 400 1.35rem/1.2 var(--display); margin: 0; }
+.scene { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; scroll-margin-top: 12px; }
+.scene.copied { border-color: var(--done); }
+.scene-head { display: flex; flex-wrap: wrap; gap: 2px 12px; justify-content: space-between; align-items: baseline; }
+.scene-name { font-weight: 700; margin: 0; font-size: 1rem; }
+.time { font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scene-text { font: 400 1.09rem/1.62 var(--story); margin: 0; overflow-wrap: anywhere; }
+.scene.writing .scene-text::after { content: ""; display: inline-block; width: .5em; height: 1em; margin-left: 3px; background: var(--accent); vertical-align: -.12em; animation: blink 1s steps(2) infinite; }
+.scene-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding-top: 10px; border-top: 1px solid var(--line); }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* Result */
+.result { max-width: 760px; margin-inline: auto; width: 100%; display: grid; gap: 16px; min-width: 0; }
+.result h1 { font-size: clamp(1.9rem, 5vw, 3rem); }
+.meta { color: var(--muted); margin: 0; font-variant-numeric: tabular-nums; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.status { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-weight: 600; }
+.timeline { display: flex; gap: 2px; height: 34px; border-radius: 6px; overflow: hidden; }
+.timeline button { flex: 1 1 0; min-width: 6px; border: 0; padding: 0; background: var(--line); color: var(--ink); font-size: .75rem; font-weight: 700; cursor: pointer; overflow: hidden; font-variant-numeric: tabular-nums; }
+.timeline button:hover { filter: brightness(.94); }
+.timeline button.copied { background: var(--done); color: var(--paper); }
+.scale { display: flex; justify-content: space-between; font-size: .76rem; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 3px; }
+.cast { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge { font-size: .84rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); }
+.badge.ok { color: var(--done); border-color: var(--done); }
+.badge.bad { color: var(--warn); border-color: var(--warn); font-weight: 600; }
+.scenes { display: grid; gap: 12px; }
+.thinking { background: var(--surface); border: 1px dashed var(--line); border-radius: 10px; padding: 20px 16px; color: var(--muted); }
+.other { display: grid; gap: 14px; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+}
+@media (max-width: 520px) {
+  .char { grid-template-columns: minmax(0, 1fr); }
+  .char .wide, .char .remove { grid-column: auto; grid-row: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene.writing .scene-text::after { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <p class="brand">X-Auto Story Generator</p>
+    <div class="top-right">
+      <button class="btn primary" type="button" id="install" hidden>Install app</button>
+      <button class="btn quiet" type="button" id="reset"></button>
+      <div class="lang" role="group" aria-label="Language / Langue">
+        <button type="button" id="lang-en" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" id="lang-fr" data-lang="fr" aria-pressed="false">FR</button>
+      </div>
+    </div>
+  </header>
+  <p class="note" id="iosTip" hidden></p>
+  <div id="view"></div>
+</div>
+<datalist id="roles"></datalist>
+<div id="live" aria-live="polite" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)"></div>
+
+<script>
+/* Each option: [English, French]. English goes in the prompt. */
+const QUESTIONS = [
+ {id:"genre",type:"one",q:["What kind of story is it?","Quel genre d'histoire est-ce ?"],hint:["Pick the closest one, or write your own.","Choisissez le plus proche, ou écrivez le vôtre."],
+  opts:[["Adventure","Aventure"],["Romance","Romance"],["Drama","Drame"],["Comedy","Comédie"],["Mystery","Mystère"],["Horror","Horreur"],["Fantasy","Fantastique"],["Science fiction","Science-fiction"],["Folk tale","Conte traditionnel"],["Inspirational","Histoire inspirante"]]},
+ {id:"idea",type:"text",required:true,q:["What happens in the story?","Que se passe-t-il dans l'histoire ?"],hint:["Tell it in a few sentences. The more specific you are, the closer the story will be to what you imagine.","Racontez-la en quelques phrases. Plus vous êtes précis, plus l'histoire ressemblera à ce que vous imaginez."],
+  ph:["For example: a young tailor finds a wedding dress with a hidden letter sewn inside, and sets out to find who wrote it.","Par exemple : une jeune couturière trouve une robe de mariée avec une lettre cachée dans la doublure, et part à la recherche de son auteur."]},
+ {id:"setting",type:"text",q:["Where and when does it happen?","Où et quand cela se passe-t-il ?"],hint:["Name real places and the time period if they matter.","Citez de vrais lieux et l'époque s'ils comptent."],
+  ph:["For example: Douala during the rainy season, present day.","Par exemple : Douala pendant la saison des pluies, de nos jours."]},
+ {id:"conflict",type:"text",q:["What does the main character want, and what stands in the way?","Que veut le personnage principal, et qu'est-ce qui l'en empêche ?"],hint:["This is what keeps listeners wanting to hear more.","C'est ce qui donne envie d'écouter la suite."],
+  ph:["For example: she wants to return the letter before the wedding on Saturday, but the family that owned the dress has moved away.","Par exemple : elle veut rendre la lettre avant le mariage de samedi, mais la famille à qui appartenait la robe a déménagé."]},
+ {id:"mood",type:"many",q:["How should the story feel?","Quelle ambiance doit avoir l'histoire ?"],hint:["Pick up to three.","Choisissez-en jusqu'à trois."],
+  opts:[["Warm","Chaleureuse"],["Funny","Drôle"],["Tense","Tendue"],["Sad","Triste"],["Hopeful","Pleine d'espoir"],["Dark","Sombre"],["Romantic","Romantique"],["Mysterious","Mystérieuse"],["Epic","Épique"]]},
+ {id:"ending",type:"one",q:["How should it end?","Comment doit-elle se terminer ?"],hint:["Describe the exact ending in your own words if you already know it.","Décrivez la fin exacte avec vos mots si vous la connaissez déjà."],
+  opts:[["A happy ending","Une fin heureuse"],["A sad ending","Une fin triste"],["A surprise twist","Un retournement surprise"],["A bittersweet ending","Une fin douce-amère"],["An open ending","Une fin ouverte"],["A clear lesson learned","Une leçon bien claire"]]},
+ {id:"audience",type:"one",q:["Who is it for?","À qui s'adresse-t-elle ?"],hint:["This sets the vocabulary and what the story can show.","Cela détermine le vocabulaire et ce que l'histoire peut montrer."],
+  opts:[["Young children","Jeunes enfants"],["Older children","Grands enfants"],["Teenagers","Adolescents"],["Adults","Adultes"],["All ages","Tous les âges"]]},
+ {id:"narrator",type:"one",q:["Who tells the story?","Qui raconte l'histoire ?"],hint:["This is the voice your voice-over will speak in.","C'est la voix que prendra votre voix off."],
+  opts:[["An outside narrator, using he, she and they","Un narrateur extérieur (il, elle, ils)"],["The main character, speaking as \"I\"","Le personnage principal, qui dit « je »"],["A storyteller speaking directly to the listener","Un conteur qui s'adresse à l'auditeur"]]},
+];
+const ROLES = [["Main character","Personnage principal"],["Best friend","Meilleur ami"],["Love interest","Amoureux"],["Villain","Méchant"],["Mother","Mère"],["Father","Père"],["Sibling","Frère ou sœur"],["Mentor","Mentor"],["Rival","Rival"],["Boss","Patron"],["Child","Enfant"],["Neighbour","Voisin"],["Stranger","Inconnu"]];
+const LENGTHS = [{min:1,scenes:3},{min:3,scenes:6},{min:5,scenes:8},{min:10,scenes:12},{min:15,scenes:16}];
+const STORY_LANGS = [["English","Anglais","English"],["French","Français","Français"],["Pidgin English","Pidgin","Pidgin English"],["Spanish","Espagnol","Español"]];
+const WPM = 140;
+
+const T = {
+ en:{reset:"Start over",resetArm:"Tap again to clear everything",question:(n,m)=>`Question ${n} of ${m}`,back:"Back",next:"Next",own:"Or write your own",ownPh:"Write it in your own words",
+  charsStep:"Characters",charsTitle:"Who is in the story?",charsHint:"Add each character's name and role. The story will use these exact names.",name:"Name",role:"Role",rolePh:"Main character, best friend…",detail:"A detail about them (optional)",detailPh:"For example: walks with a limp, always sings when nervous",remove:"Remove",add:"+ Add another character",must:"Other details that must appear (optional)",mustPh:"Places, objects, phrases or events the story must include",
+  lenStep:"Length",lenTitle:"How long is your voice-over?",lenHint:"This sets the length of the story and the number of scenes.",minutes:n=>`${n} min`,sceneCount:(s,w)=>`${s} scenes, about ${w} words`,storyLang:"Story language",write:"Get my story prompt",usage:"Next, you will copy a prompt into an AI tool such as Claude, ChatGPT or Gemini, then paste its answer back here.",other:"Use another AI tool instead",example:"Fill in an example",
+  needIdea:"Tell me what happens in the story first (question 2).",needChar:"Add at least one character with a name.",goFix:"Go there",
+  sampleTitle:"How your story will appear",sampleTag:"Example",sampleNote:"Every scene gets its own box with its own copy button. You can also copy the whole story in one tap.",
+  copyAll:"Copy the whole story",copyScene:"Copy this scene",copied:"Copied",copiedAgain:"Copied. Copy again",selected:"Text selected. Copy it from your device",again:"Get another version",edit:"Change my answers",stop:"Stop",thinking:"Claude is planning your story. This can take a minute or two.",writing:(a)=>`Writing scene ${a}…`,stopped:"Stopped. The scenes written so far are kept.",cut:"The story was cut off before the end. Try a shorter length.",
+  meta:(s,w,t)=>`${s} ${s===1?"scene":"scenes"}, ${w} words, about ${t} of speaking`,scene:n=>`Scene ${n}`,words:w=>`${w} words`,progress:(a,b)=>`${a} of ${b} scenes copied`,timelineNote:`Times are estimates at ${WPM} words per minute. Your recording may run faster or slower.`,inScenes:(n,a,b)=>`${n}: in ${a} of ${b} scenes`,missing:n=>`${n}: not named in the story`,
+  err:{rate_limited:"You have reached a usage limit for now. Try again later.",session_expired:"Please sign in to Claude again, then tap the button again.",refused:"Claude could not write this story. Change the details that may have caused this and try again.",empty_completion:"No story came back. Change your answers slightly and try again.",upstream_error:"The connection failed. Try again in a moment."},
+  otherTitle:"Get your story from an AI tool",otherHint:"Copy the prompt and paste it into your AI tool. When it finishes, copy its full answer, then come back and paste it here. The story will be split into scene boxes.",notAvail:"",copyPrompt:"Copy the prompt",pasteLabel:"Paste the AI tool's answer",pastePh:"Paste the full answer here",showScenes:"Show in scene boxes",pasteEmpty:"Paste the answer first.",backToQuestions:"Back to my answers"},
+ fr:{reset:"Recommencer",resetArm:"Appuyez encore pour tout effacer",question:(n,m)=>`Question ${n} sur ${m}`,back:"Retour",next:"Suivant",own:"Ou écrivez votre réponse",ownPh:"Écrivez avec vos propres mots",
+  charsStep:"Personnages",charsTitle:"Qui est dans l'histoire ?",charsHint:"Ajoutez le nom et le rôle de chaque personnage. L'histoire utilisera exactement ces noms.",name:"Nom",role:"Rôle",rolePh:"Personnage principal, meilleur ami…",detail:"Un détail sur ce personnage (facultatif)",detailPh:"Par exemple : boite un peu, chante toujours quand il a peur",remove:"Retirer",add:"+ Ajouter un personnage",must:"Autres détails à inclure (facultatif)",mustPh:"Lieux, objets, phrases ou événements que l'histoire doit contenir",
+  lenStep:"Durée",lenTitle:"Quelle est la durée de votre voix off ?",lenHint:"Cela détermine la longueur de l'histoire et le nombre de scènes.",minutes:n=>`${n} min`,sceneCount:(s,w)=>`${s} scènes, environ ${w} mots`,storyLang:"Langue de l'histoire",write:"Obtenir le prompt de mon histoire",usage:"Ensuite, vous copierez un prompt dans un outil d'IA comme Claude, ChatGPT ou Gemini, puis vous collerez sa réponse ici.",other:"Utiliser un autre outil d'IA",example:"Remplir avec un exemple",
+  needIdea:"Dites-moi d'abord ce qui se passe dans l'histoire (question 2).",needChar:"Ajoutez au moins un personnage avec un nom.",goFix:"Y aller",
+  sampleTitle:"Comment votre histoire apparaîtra",sampleTag:"Exemple",sampleNote:"Chaque scène a son propre cadre et son propre bouton de copie. Vous pouvez aussi copier toute l'histoire en une fois.",
+  copyAll:"Copier toute l'histoire",copyScene:"Copier cette scène",copied:"Copié",copiedAgain:"Copié. Copier encore",selected:"Texte sélectionné. Copiez-le depuis votre appareil",again:"Obtenir une autre version",edit:"Modifier mes réponses",stop:"Arrêter",thinking:"Claude prépare votre histoire. Cela peut prendre une ou deux minutes.",writing:(a)=>`Écriture de la scène ${a}…`,stopped:"Arrêté. Les scènes déjà écrites sont conservées.",cut:"L'histoire a été coupée avant la fin. Essayez une durée plus courte.",
+  meta:(s,w,t)=>`${s} ${s===1?"scène":"scènes"}, ${w} mots, environ ${t} de parole`,scene:n=>`Scène ${n}`,words:w=>`${w} mots`,progress:(a,b)=>`${a} scène${a>1?"s":""} copiée${a>1?"s":""} sur ${b}`,timelineNote:`Durées estimées à ${WPM} mots par minute. Votre enregistrement peut aller plus vite ou moins vite.`,inScenes:(n,a,b)=>`${n} : dans ${a} scène${a>1?"s":""} sur ${b}`,missing:n=>`${n} : pas nommé dans l'histoire`,
+  err:{rate_limited:"Vous avez atteint une limite d'utilisation pour le moment. Réessayez plus tard.",session_expired:"Reconnectez-vous à Claude, puis appuyez de nouveau sur le bouton.",refused:"Claude n'a pas pu écrire cette histoire. Changez les détails qui ont pu poser problème, puis réessayez.",empty_completion:"Aucune histoire n'est revenue. Changez un peu vos réponses et réessayez.",upstream_error:"La connexion a échoué. Réessayez dans un instant."},
+  otherTitle:"Obtenez votre histoire avec un outil d'IA",otherHint:"Copiez le prompt et collez-le dans votre outil d'IA. Quand il a terminé, copiez sa réponse complète, puis revenez la coller ici. L'histoire sera répartie en cadres par scène.",notAvail:"",copyPrompt:"Copier le prompt",pasteLabel:"Collez la réponse de l'outil d'IA",pastePh:"Collez la réponse complète ici",showScenes:"Afficher par scènes",pasteEmpty:"Collez d'abord la réponse.",backToQuestions:"Retour à mes réponses"},
+};
+const SAMPLE = {
+ en:{title:"The Letter in the Lining",scenes:[
+  {name:"The dress",text:"Amina had sewn a thousand hems in her small shop in Akwa, but no dress had ever crackled under her needle. She stopped, felt along the lining, and drew out a folded letter, its ink gone brown with age."},
+  {name:"The address",text:"Rain hammered the tin roof as her uncle Tobi read the name on the envelope twice. \"That family left Douala years ago,\" he said slowly. Amina was already reaching for her umbrella. The wedding was on Saturday."}]},
+ fr:{title:"La lettre dans la doublure",scenes:[
+  {name:"La robe",text:"Amina avait cousu mille ourlets dans sa petite boutique d'Akwa, mais jamais une robe n'avait crissé sous son aiguille. Elle s'arrêta, palpa la doublure et en sortit une lettre pliée, à l'encre brunie par les années."},
+  {name:"L'adresse",text:"La pluie martelait le toit de tôle pendant que son oncle Tobi relisait le nom sur l'enveloppe. « Cette famille a quitté Douala il y a des années », dit-il lentement. Amina attrapait déjà son parapluie. Le mariage était samedi."}]},
+};
+const EXAMPLE = {
+ a:{genre:"Mystery",idea:"A young tailor finds a wedding dress with a hidden letter sewn inside the lining, and sets out to find who wrote it before the wedding.",setting:"Douala during the rainy season, present day.",conflict:"She wants to deliver the letter before the wedding on Saturday, but the family that owned the dress moved away years ago.",mood:["Warm","Mysterious","Hopeful"],ending:"A surprise twist",audience:"All ages",narrator:"An outside narrator, using he, she and they"},
+ own:{},chars:[{id:1,name:"Amina",role:"Main character",detail:"A tailor who hums when she is thinking"},{id:2,name:"Uncle Tobi",role:"Mentor",detail:"Retired postman who knows every street in the city"}],must:"The letter is sewn into the lining of the dress.",len:3,
+};
+const QN = QUESTIONS.length, CHARS = QN, LEN = QN + 1, LAST = LEN;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const STORE = "scene-by-scene-v1";
+function blank() { return {a:{}, own:{}, chars:[{id:1,name:"",role:"",detail:""}], must:"", len:3, storyLang:"", storyLangOwn:""}; }
+let S = Object.assign({lang:/^fr/i.test(navigator.language || "") ? "fr" : "en", step:0, view:"ask", story:null, copied:{}}, blank());
+try { const saved = JSON.parse(localStorage.getItem(STORE)); if (saved && saved.a) S = Object.assign(S, saved); } catch (e) {}
+function save() { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} }
+const t = k => T[S.lang][k];
+const L = pair => pair[S.lang === "fr" ? 1 : 0];
+let uid = Math.max(1, ...S.chars.map(c => c.id)) + 1;
+let run = {busy:false, ctl:null, note:"", noteKind:""};
+const samplePromise = window.claude && window.claude.use ? window.claude.use("sample") : Promise.resolve(null);
+
+/* Prompt */
+const namedChars = () => S.chars.filter(c => c.name.trim());
+function answerOf(q) {
+  const own = (S.own[q.id] || "").trim();
+  if (q.type === "text") return (S.a[q.id] || "").trim();
+  if (q.type === "one") return own || S.a[q.id] || "";
+  return (S.a[q.id] || []).concat(own ? [own] : []).join(", ");
+}
+function storyLanguage() {
+  const own = (S.storyLangOwn || "").trim();
+  return own || S.storyLang || (S.lang === "fr" ? "French" : "English");
+}
+function lenInfo() {
+  const l = LENGTHS.find(x => x.min === S.len) || LENGTHS[1];
+  return {min:l.min, scenes:l.scenes, words:l.min * WPM};
+}
+function buildPrompt() {
+  const lines = [["Genre", "genre"], ["What happens", "idea"], ["Place and time", "setting"], ["What the main character wants and what stands in the way", "conflict"], ["Mood", "mood"], ["Ending", "ending"], ["Audience", "audience"], ["Who tells the story", "narrator"]];
+  const brief = lines.map(([label, id]) => { const v = answerOf(QUESTIONS.find(q => q.id === id)); return v ? `- ${label}: ${v}` : null; }).filter(Boolean).join("\n");
+  const cast = namedChars().map(c => `- ${c.name.trim()}${c.role.trim() ? ", role: " + c.role.trim() : ""}${c.detail.trim() ? ", detail: " + c.detail.trim() : ""}`).join("\n");
+  const info = lenInfo(), must = (S.must || "").trim();
+  return `You are an experienced storyteller. Write one complete, original story to be read aloud as a voice-over.
+
+THE BRIEF
+${brief}
+
+THE CHARACTERS
+${cast}
+${must ? `\nDETAILS THAT MUST APPEAR\n${must}\n` : ""}
+RULES
+- Follow every item in the brief exactly. Never contradict it or replace it with something else.
+- Use each character's name exactly as spelled above, and keep each character in the given role. Every character must play an active part in the plot, and every given detail must appear in the story.
+- Do not add other named characters unless they are minor and the plot needs them.
+- Write in ${storyLanguage()}, with vocabulary and content suited to the audience.
+- Write exactly ${info.scenes} scenes and about ${info.words} words in total, or about ${Math.round(info.words / info.scenes)} words per scene. A new scene starts whenever the place, the time or the situation changes.
+- Each scene is one single paragraph with no line breaks inside it. It must read smoothly when spoken: clear sentences, natural rhythm, and specific details from the brief.
+- Do not use stage directions, sound notes, lists, markdown, asterisks or headings inside a paragraph.
+- Give the story a real beginning, rising tension and the requested ending, finished in the last scene.
+
+OUTPUT FORMAT
+Use exactly this format, with nothing before or after it. Keep the words TITLE and SCENE in English, and write the title and scene names in ${storyLanguage()}.
+TITLE: the story title
+=== SCENE 1: a short scene name
+The paragraph for scene 1.
+=== SCENE 2: a short scene name
+The paragraph for scene 2.`;
+}
+
+/* Parsing, also used while the story streams in */
+const clean = s => s.replace(/\*\*|__/g, "").replace(/^[#*\s]+/, "").replace(/\s+/g, " ").trim();
+const MARK = /^(?:={2,}|#{1,4}|\*\*)?\s*(?:SCENE|SC[ÈE]NE|ESCENA)\s+\d+\s*(?:[:.\-–—]\s*(.*?))?\s*(?:={2,}|\*\*)?$/i;
+function parseStory(raw, final) {
+  let title = "";
+  const scenes = [], before = [];
+  let cur = null;
+  raw.replace(/\r/g, "").split("\n").forEach(line => {
+    const s = line.trim();
+    if (!s) return;
+    const tm = !scenes.length && s.match(/^\**\s*(?:TITLE|TITRE)\s*\**\s*:\s*(.+)$/i);
+    if (tm) { title = clean(tm[1]); return; }
+    const sm = s.match(MARK);
+    if (sm) { cur = {name: clean(sm[1] || ""), parts: []}; scenes.push(cur); return; }
+    if (/^={1,}/.test(s)) return;
+    if (cur) cur.parts.push(s); else before.push(s);
+  });
+  if (!scenes.length && final) before.forEach(p => scenes.push({name:"", parts:[p]}));
+  return {title, scenes: scenes.map(x => ({name:x.name, text:clean(x.parts.join(" "))})).filter((x, i, all) => x.text || !final || i < all.length - 1)};
+}
+const wordCount = s => (s.trim().match(/\S+/g) || []).length;
+const clock = sec => { const r = Math.round(sec); return `${Math.floor(r / 60)}:${String(r % 60).padStart(2, "0")}`; };
+function speakLabel(sec) {
+  const r = Math.round(sec), m = Math.floor(r / 60), s = r % 60;
+  return m ? `${m} min ${String(s).padStart(2, "0")} s` : `${s} s`;
+}
+
+/* Question screens */
+function stepsHtml() {
+  const filled = i => {
+    if (i < QN) return !!answerOf(QUESTIONS[i]);
+    if (i === CHARS) return namedChars().length > 0;
+    return false;
+  };
+  const label = i => i < QN ? String(i + 1) : i === CHARS ? t("charsStep") : t("lenStep");
+  return `<nav class="steps" aria-label="Questions">${Array.from({length: LAST + 1}, (_, i) => `<button type="button" id="go-${i}" data-step="${i}"${i === S.step ? ' aria-current="step"' : ""} class="${filled(i) && i !== S.step ? "filled" : ""}">${esc(label(i))}</button>`).join("")}</nav>`;
+}
+function sampleHtml() {
+  const x = SAMPLE[S.lang];
+  let at = 0;
+  const boxes = x.scenes.map((sc, i) => {
+    const sec = wordCount(sc.text) / WPM * 60, start = at; at += sec;
+    return `<div class="scene"><div class="scene-head"><p class="scene-name">${esc(t("scene")(i + 1))}: ${esc(sc.name)}</p><span class="time">${clock(start)}–${clock(at)}</span></div><p class="scene-text">${esc(sc.text)}</p><div class="scene-foot"><span class="time">${esc(t("words")(wordCount(sc.text)))}</span><span class="btn quiet" aria-hidden="true">${esc(t("copyScene"))}</span></div></div>`;
+  }).join("");
+  return `<aside class="sample"><div><span class="sample-tag">${esc(t("sampleTag"))}</span></div><h2>${esc(t("sampleTitle"))}</h2><p class="note">${esc(t("sampleNote"))}</p>${boxes}</aside>`;
+}
+function chipsHtml(q, pairs, value, isOn) {
+  return `<div class="chips" role="group" aria-labelledby="qTitle">${pairs.map((p, i) => `<button type="button" class="chip" id="opt-${q}-${i}" data-q="${q}" data-i="${i}" aria-pressed="${isOn(p[0])}">${esc(L(p))}</button>`).join("")}</div>`;
+}
+function questionHtml() {
+  const q = QUESTIONS[S.step];
+  let ans;
+  if (q.type === "text") {
+    ans = `<textarea id="q-${q.id}" data-text="${q.id}" aria-labelledby="qTitle" placeholder="${esc(L(q.ph))}">${esc(S.a[q.id] || "")}</textarea>`;
+  } else {
+    const isOn = v => q.type === "many" ? (S.a[q.id] || []).includes(v) : S.a[q.id] === v && !(S.own[q.id] || "").trim();
+    ans = chipsHtml(q.id, q.opts, S.a[q.id], isOn) + `<div><label class="lab" for="own-${q.id}">${esc(t("own"))}</label><input type="text" id="own-${q.id}" data-own="${q.id}" placeholder="${esc(t("ownPh"))}" value="${esc(S.own[q.id] || "")}" autocomplete="off"></div>`;
+  }
+  return `<p class="eyebrow">${esc(t("question")(S.step + 1, QN))}</p><h1 id="qTitle">${esc(L(q.q))}</h1><p class="hint">${esc(L(q.hint))}</p><div class="answer">${ans}</div>`;
+}
+function charsHtml() {
+  const rows = S.chars.map(c => `<div class="char" id="char-${c.id}">
+    <div><label class="lab" for="cn-${c.id}">${esc(t("name"))}</label><input type="text" id="cn-${c.id}" data-char="${c.id}" data-k="name" value="${esc(c.name)}" autocomplete="off"></div>
+    <div><label class="lab" for="cr-${c.id}">${esc(t("role"))}</label><input type="text" id="cr-${c.id}" data-char="${c.id}" data-k="role" list="roles" placeholder="${esc(t("rolePh"))}" value="${esc(c.role)}" autocomplete="off"></div>
+    ${S.chars.length > 1 ? `<button type="button" class="link remove" id="rm-${c.id}" data-rm="${c.id}">${esc(t("remove"))}</button>` : ""}
+    <div class="wide"><label class="lab" for="cd-${c.id}">${esc(t("detail"))}</label><input type="text" id="cd-${c.id}" data-char="${c.id}" data-k="detail" placeholder="${esc(t("detailPh"))}" value="${esc(c.detail)}" autocomplete="off"></div>
+  </div>`).join("");
+  return `<p class="eyebrow">${esc(t("charsStep"))}</p><h1 id="qTitle">${esc(t("charsTitle"))}</h1><p class="hint">${esc(t("charsHint"))}</p>
+    <div class="answer">${rows}<div><button type="button" class="btn" id="addChar">${esc(t("add"))}</button></div>
+    <div><label class="lab" for="must">${esc(t("must"))}</label><textarea id="must" data-must="1" placeholder="${esc(t("mustPh"))}" style="min-height:90px">${esc(S.must || "")}</textarea></div></div>`;
+}
+function lenHtml() {
+  const lens = LENGTHS.map(l => `<button type="button" class="chip" id="len-${l.min}" data-len="${l.min}" aria-pressed="${S.len === l.min}">${esc(t("minutes")(l.min))}<small>${esc(t("sceneCount")(l.scenes, l.min * WPM))}</small></button>`).join("");
+  const langs = STORY_LANGS.map((p, i) => { const on = (S.storyLang || (S.lang === "fr" ? "French" : "English")) === p[0] && !(S.storyLangOwn || "").trim(); return `<button type="button" class="chip" id="sl-${i}" data-sl="${esc(p[0])}" aria-pressed="${on}">${esc(p[2])}</button>`; }).join("");
+  return `<p class="eyebrow">${esc(t("lenStep"))}</p><h1 id="qTitle">${esc(t("lenTitle"))}</h1><p class="hint">${esc(t("lenHint"))}</p>
+    <div class="answer"><div class="chips" role="group" aria-labelledby="qTitle">${lens}</div>
+    <div><span class="lab" id="slLabel">${esc(t("storyLang"))}</span><div class="chips" role="group" aria-labelledby="slLabel">${langs}</div></div>
+    <div><label class="lab" for="slOwn">${esc(t("own"))}</label><input type="text" id="slOwn" data-slown="1" value="${esc(S.storyLangOwn || "")}" autocomplete="off"></div></div>`;
+}
+function renderAsk() {
+  const body = S.step < QN ? questionHtml() : S.step === CHARS ? charsHtml() : lenHtml();
+  const atEnd = S.step === LAST;
+  $("#view").innerHTML = `<div class="layout"><div style="min-width:0">${stepsHtml()}${body}
+    <p class="error" id="formError" hidden></p>
+    <div class="nav">${S.step > 0 ? `<button type="button" class="btn" id="back" data-step="${S.step - 1}">${esc(t("back"))}</button>` : "<span></span>"}${atEnd ? `<button type="button" class="btn primary" id="writeBtn">${esc(t("write"))}</button>` : `<button type="button" class="btn primary" id="next" data-step="${S.step + 1}">${esc(t("next"))}</button>`}</div>
+    ${atEnd ? `<p class="note" style="margin-top:12px">${esc(t("usage"))}</p>` : ""}
+    ${S.step === 0 ? `<p style="margin:14px 0 0"><button type="button" class="link" id="exampleBtn">${esc(t("example"))}</button></p>` : ""}
+  </div>${sampleHtml()}</div>`;
+}
+function refreshSteps() { const n = $(".steps"); if (n) n.outerHTML = stepsHtml(); }
+
+/* Result screen */
+function storyStats(st) {
+  let at = 0;
+  const parts = st.scenes.map(s => { const w = wordCount(s.text), sec = w / WPM * 60, start = at; at += sec; return {w, sec, start, end: at}; });
+  return {parts, words: parts.reduce((n, p) => n + p.w, 0), total: at};
+}
+function renderResult() {
+  $("#view").innerHTML = `<div class="result">
+    <div><p class="eyebrow" style="margin-top:0" id="rEyebrow"></p><h1 id="rTitle"></h1></div>
+    <p class="meta" id="rMeta"></p>
+    <div class="status" id="rStatus" hidden></div>
+    <div class="actions" id="rActions">
+      <button type="button" class="btn primary" id="copyAll">${esc(t("copyAll"))}</button>
+      <button type="button" class="btn quiet" id="againBtn">${esc(t("again"))}</button>
+      <button type="button" class="btn quiet" id="editBtn">${esc(t("edit"))}</button>
+    </div>
+    <div id="rTimelineWrap" hidden><div class="timeline" id="rTimeline" role="group"></div><div class="scale"><span>0:00</span><span id="rTotal"></span></div><p class="note" style="margin-top:6px;font-size:.84rem">${esc(t("timelineNote"))}</p></div>
+    <div class="cast" id="rCast"></div>
+    <div class="thinking" id="rThinking" hidden>${esc(t("thinking"))}</div>
+    <div class="scenes" id="rScenes"></div>
+    <p class="meta" id="rProgress" style="text-align:right"></p>
+  </div>`;
+  updateResult();
+}
+function updateResult() {
+  const st = S.story || {title:"", scenes:[]};
+  const stats = storyStats(st);
+  const n = st.scenes.length, busy = run.busy;
+  $("#rTitle").textContent = st.title || (busy ? "…" : "");
+  $("#rEyebrow").textContent = S.lang === "fr" ? "Votre histoire" : "Your story";
+  $("#rMeta").textContent = n ? t("meta")(n, stats.words, speakLabel(stats.total)) : "";
+  const status = $("#rStatus");
+  status.hidden = !(busy || run.note);
+  status.innerHTML = busy
+    ? `<span>${esc(n ? t("writing")(n) : "")}</span><button type="button" class="btn quiet" id="stopBtn">${esc(t("stop"))}</button>`
+    : `<span style="color:var(--${run.noteKind === "err" ? "accent" : "muted"})">${esc(run.note)}</span>`;
+  $("#rThinking").hidden = !(busy && !n);
+  $("#copyAll").disabled = busy || !n;
+  $("#againBtn").disabled = busy;
+  $("#editBtn").disabled = busy;
+  $("#rTimelineWrap").hidden = !n;
+  $("#rTotal").textContent = clock(stats.total);
+  const tl = $("#rTimeline");
+  while (tl.children.length > n) tl.lastChild.remove();
+  st.scenes.forEach((s, i) => {
+    let b = tl.children[i];
+    if (!b) { b = document.createElement("button"); b.type = "button"; b.dataset.jump = i; b.id = "tl-" + i; b.textContent = i + 1; tl.append(b); }
+    b.style.flexGrow = Math.max(1, stats.parts[i].w);
+    b.setAttribute("aria-label", t("scene")(i + 1));
+    b.classList.toggle("copied", !!S.copied[i]);
+  });
+  const box = $("#rScenes");
+  while (box.children.length > n) box.lastChild.remove();
+  st.scenes.forEach((s, i) => {
+    let el = document.getElementById("scene-" + i);
+    if (!el) {
+      el = document.createElement("article");
+      el.className = "scene"; el.id = "scene-" + i;
+      el.innerHTML = `<div class="scene-head"><h2 class="scene-name"></h2><span class="time" data-role="range"></span></div><p class="scene-text"></p><div class="scene-foot"><span class="time" data-role="words"></span><button type="button" class="btn" id="copy-${i}" data-copy="${i}"></button></div>`;
+      box.append(el);
+    }
+    const p = stats.parts[i], writing = busy && i === n - 1;
+    el.querySelector(".scene-name").textContent = t("scene")(i + 1) + (s.name ? ": " + s.name : "");
+    el.querySelector(".scene-text").textContent = s.text;
+    el.querySelector('[data-role="range"]').textContent = `${clock(p.start)}–${clock(p.end)}`;
+    el.querySelector('[data-role="words"]').textContent = t("words")(p.w);
+    el.classList.toggle("writing", writing);
+    el.classList.toggle("copied", !!S.copied[i]);
+    const c = el.querySelector("[data-copy]");
+    c.disabled = writing;
+    c.classList.toggle("copied", !!S.copied[i]);
+    if (!c._flash) c.textContent = S.copied[i] ? t("copiedAgain") : t("copyScene");
+  });
+  const cast = $("#rCast");
+  if (busy || !n) cast.innerHTML = "";
+  else cast.innerHTML = namedChars().map(c => {
+    const name = c.name.trim(), low = name.toLowerCase();
+    const hits = st.scenes.filter(s => s.text.toLowerCase().includes(low)).length;
+    return `<span class="badge ${hits ? "ok" : "bad"}">${esc(hits ? t("inScenes")(name, hits, n) : t("missing")(name))}</span>`;
+  }).join("");
+  const done = Object.keys(S.copied).filter(k => S.copied[k] && +k < n).length;
+  $("#rProgress").textContent = !busy && n ? t("progress")(done, n) : "";
+}
+function wholeStory() {
+  const st = S.story;
+  return (st.title ? st.title + "\n\n" : "") + st.scenes.map(s => s.text).join("\n\n");
+}
+
+/* Writing */
+function validate() {
+  if (!(S.a.idea || "").trim()) return {msg: t("needIdea"), step: 1};
+  if (!namedChars().length) return {msg: t("needChar"), step: CHARS};
+  return null;
+}
+function showFormError(v) {
+  const el = $("#formError");
+  if (!el) return;
+  el.hidden = false;
+  el.innerHTML = `${esc(v.msg)} <button type="button" class="link" id="fixBtn" data-step="${v.step}">${esc(t("goFix"))}</button>`;
+}
+async function writeStory() {
+  const v = validate();
+  if (v) { if (S.view === "ask") showFormError(v); return; }
+  const prompt = buildPrompt();
+  S.view = "result"; S.story = {title:"", scenes:[]}; S.copied = {};
+  run = {busy:true, ctl:new AbortController(), note:"", noteKind:""};
+  render(); window.scrollTo({top:0});
+  const sample = await samplePromise.catch(() => null);
+  if (!sample) { run.busy = false; S.view = "other"; S.story = null; run.note = t("notAvail"); render(); return; }
+  try {
+    const res = await sample(prompt, {
+      cache: false,
+      signal: run.ctl.signal,
+      onText: ({text}) => { S.story = parseStory(text, false); updateResult(); },
+    });
+    S.story = parseStory(res.text, true);
+    run.busy = false;
+    run.note = res.truncated ? t("cut") : "";
+    run.noteKind = res.truncated ? "err" : "";
+  } catch (e) {
+    run.busy = false;
+    const code = e && e.code;
+    if (["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(code)) {
+      S.view = "other"; S.story = null; run.note = t("notAvail"); save(); render(); return;
+    }
+    if (code === "refused") S.story = {title:"", scenes:[]};
+    else if (e && e.text) S.story = parseStory(e.text, true);
+    if (code === "cancelled") { run.note = t("stopped"); run.noteKind = ""; }
+    else { run.note = t("err")[code] || t("err").upstream_error; run.noteKind = "err"; }
+  }
+  save();
+  if (S.view === "result") updateResult();
+}
+function renderOther() {
+  const note = run.note;
+  $("#view").innerHTML = `<div class="result"><h1>${esc(t("otherTitle"))}</h1>
+    ${note ? `<p class="note">${esc(note)}</p>` : ""}
+    <p class="hint" style="margin:0">${esc(t("otherHint"))}</p>
+    <div class="other">
+      <div><label class="lab" for="promptOut">Prompt</label><textarea id="promptOut" rows="5" readonly style="min-height:110px">${esc(buildPrompt())}</textarea></div>
+      <div class="actions"><button type="button" class="btn primary" id="copyPrompt">${esc(t("copyPrompt"))}</button><a class="btn quiet" href="https://claude.ai/new" target="_blank" rel="noopener">Claude</a><a class="btn quiet" href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPT</a><a class="btn quiet" href="https://gemini.google.com/app" target="_blank" rel="noopener">Gemini</a></div>
+      <div><label class="lab" for="pasted">${esc(t("pasteLabel"))}</label><textarea id="pasted" placeholder="${esc(t("pastePh"))}"></textarea></div>
+      <p class="error" id="pasteError" hidden></p>
+      <div class="actions"><button type="button" class="btn" id="pasteClip">${S.lang === "fr" ? "Coller ma réponse copiée" : "Paste my copied answer"}</button><button type="button" class="btn primary" id="showScenes">${esc(t("showScenes"))}</button><button type="button" class="btn quiet" id="backAsk">${esc(t("backToQuestions"))}</button></div>
+    </div></div>`;
+}
+function render() {
+  document.documentElement.lang = S.lang;
+  $("#reset").textContent = t("reset");
+  delete $("#reset").dataset.armed;
+  ["en", "fr"].forEach(l => $("#lang-" + l).setAttribute("aria-pressed", String(S.lang === l)));
+  $("#roles").innerHTML = ROLES.map(r => `<option value="${esc(L(r))}"></option>`).join("");
+  if (S.view === "result" && S.story) renderResult();
+  else if (S.view === "other") renderOther();
+  else { S.view = "ask"; renderAsk(); }
+}
+
+/* Copy */
+function flash(btn, msg, restore) {
+  btn._flash = true;
+  btn.textContent = msg;
+  $("#live").textContent = msg;
+  clearTimeout(btn._t);
+  btn._t = setTimeout(() => { btn._flash = false; btn.textContent = restore(); }, 1600);
+}
+function selectNode(el) {
+  if (el.select) { el.focus(); el.select(); return; }
+  const r = document.createRange(); r.selectNodeContents(el);
+  const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+}
+function copyText(text, btn, el, restore, ok) {
+  const fail = () => { if (el) selectNode(el); flash(btn, t("selected"), restore); };
+  if (!navigator.clipboard) return fail();
+  navigator.clipboard.writeText(text).then(() => { if (ok) ok(); flash(btn, t("copied"), restore); }, fail);
+}
+
+/* Events */
+document.addEventListener("click", e => {
+  const el = e.target.closest("button");
+  if (!el) return;
+  if (el.dataset.lang) { S.lang = el.dataset.lang; save(); render(); return; }
+  if (el.dataset.step != null) { S.step = +el.dataset.step; S.view = "ask"; save(); render(); window.scrollTo({top:0}); return; }
+  if (el.dataset.q) {
+    const q = QUESTIONS.find(x => x.id === el.dataset.q), v = q.opts[+el.dataset.i][0];
+    if (q.type === "one") {
+      S.a[q.id] = S.a[q.id] === v && !(S.own[q.id] || "").trim() ? undefined : v;
+      S.own[q.id] = ""; const o = document.getElementById("own-" + q.id); if (o) o.value = "";
+      q.opts.forEach((p, i) => document.getElementById(`opt-${q.id}-${i}`).setAttribute("aria-pressed", String(S.a[q.id] === p[0])));
+    } else {
+      const list = S.a[q.id] || [];
+      S.a[q.id] = list.includes(v) ? list.filter(x => x !== v) : list.concat(v);
+      el.setAttribute("aria-pressed", String(S.a[q.id].includes(v)));
+    }
+    save(); refreshSteps(); return;
+  }
+  if (el.dataset.len) { S.len = +el.dataset.len; save(); LENGTHS.forEach(l => $("#len-" + l.min).setAttribute("aria-pressed", String(S.len === l.min))); return; }
+  if (el.dataset.sl) { S.storyLang = el.dataset.sl; S.storyLangOwn = ""; save(); renderAsk(); return; }
+  if (el.dataset.rm) { S.chars = S.chars.filter(c => c.id !== +el.dataset.rm); save(); renderAsk(); return; }
+  if (el.dataset.jump != null) { document.getElementById("scene-" + el.dataset.jump).scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start"}); return; }
+  if (el.dataset.copy != null) {
+    const i = +el.dataset.copy;
+    copyText(S.story.scenes[i].text, el, document.querySelector(`#scene-${i} .scene-text`), () => S.copied[i] ? t("copiedAgain") : t("copyScene"), () => { S.copied[i] = true; save(); updateResult(); });
+    return;
+  }
+  switch (el.id) {
+    case "addChar": S.chars.push({id: uid++, name:"", role:"", detail:""}); save(); renderAsk(); document.getElementById("cn-" + S.chars[S.chars.length - 1].id).focus(); break;
+    case "exampleBtn": { const x = JSON.parse(JSON.stringify(EXAMPLE)); S.a = x.a; S.own = x.own; S.chars = x.chars; S.must = x.must; S.len = x.len; S.storyLang = ""; S.storyLangOwn = ""; uid = 3; S.step = LAST; save(); render(); break; }
+    case "writeBtn": case "againBtn": writeStory(); break;
+    case "stopBtn": if (run.ctl) run.ctl.abort(); break;
+    case "editBtn": case "backAsk": S.view = "ask"; run.note = ""; save(); render(); window.scrollTo({top:0}); break;
+    case "copyAll": copyText(wholeStory(), el, $("#rScenes"), () => t("copyAll")); break;
+    case "otherBtn": { const v = validate(); if (v) { showFormError(v); break; } run.note = ""; S.view = "other"; save(); render(); window.scrollTo({top:0}); break; }
+    case "copyPrompt": copyText($("#promptOut").value, el, $("#promptOut"), () => t("copyPrompt")); break;
+    case "showScenes": {
+      const raw = $("#pasted").value;
+      if (!raw.trim()) { const pe = $("#pasteError"); pe.hidden = false; pe.textContent = t("pasteEmpty"); break; }
+      S.story = parseStory(raw, true); S.copied = {}; S.view = "result"; run.note = ""; save(); render(); window.scrollTo({top:0}); break;
+    }
+    case "reset":
+      if (el.dataset.armed) { Object.assign(S, blank(), {step:0, view:"ask", story:null, copied:{}}); run.note = ""; save(); render(); window.scrollTo({top:0}); break; }
+      el.dataset.armed = "1"; el.textContent = t("resetArm");
+      setTimeout(() => { delete el.dataset.armed; el.textContent = t("reset"); }, 3500);
+      break;
+  }
+});
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (el.dataset.text) { S.a[el.dataset.text] = el.value; }
+  else if (el.dataset.own) {
+    const q = QUESTIONS.find(x => x.id === el.dataset.own);
+    S.own[q.id] = el.value;
+    if (q.type === "one" && el.value.trim()) { S.a[q.id] = undefined; q.opts.forEach((p, i) => document.getElementById(`opt-${q.id}-${i}`).setAttribute("aria-pressed", "false")); }
+  }
+  else if (el.dataset.char) { const c = S.chars.find(x => x.id === +el.dataset.char); if (c) c[el.dataset.k] = el.value; }
+  else if (el.dataset.must) S.must = el.value;
+  else if (el.dataset.slown) { S.storyLangOwn = el.value; document.querySelectorAll("[data-sl]").forEach(b => b.setAttribute("aria-pressed", String(!el.value.trim() && (S.storyLang || (S.lang === "fr" ? "French" : "English")) === b.dataset.sl))); }
+  else return;
+  save(); refreshSteps();
+});
+render();
+</script>
+<script>
+/* Install button, pasting and offline support */
+const INSTALL_T = {
+  en: {btn: "Install app", ios: "To install on iPhone or iPad, open this page in Safari, tap Share, then tap Add to Home Screen.", paste: "Paste your answer in the box above."},
+  fr: {btn: "Installer l'application", ios: "Pour l'installer sur iPhone ou iPad, ouvrez cette page dans Safari, appuyez sur Partager, puis sur Sur l'écran d'accueil.", paste: "Collez votre réponse dans le cadre ci-dessus."},
+};
+(function () {
+  const btn = document.getElementById("install"), tip = document.getElementById("iosTip");
+  const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let promptEvent = null;
+  function setText() { btn.textContent = INSTALL_T[S.lang].btn; tip.textContent = INSTALL_T[S.lang].ios; }
+  setText();
+  document.addEventListener("click", async e => {
+    if (e.target.closest("[data-lang]")) setText();
+    if (e.target.id === "pasteClip") {
+      const box = document.getElementById("pasted"), err = document.getElementById("pasteError");
+      try {
+        box.value = await navigator.clipboard.readText();
+        err.hidden = true;
+        if (box.value.trim()) document.getElementById("showScenes").click();
+      } catch (x) {
+        err.hidden = false; err.textContent = INSTALL_T[S.lang].paste; box.focus();
+      }
+    }
+  });
+  if (ios && !installed) btn.hidden = false;
+  addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptEvent = e; if (!installed) btn.hidden = false; });
+  addEventListener("appinstalled", () => { btn.hidden = true; tip.hidden = true; promptEvent = null; });
+  btn.addEventListener("click", async () => {
+    if (!promptEvent) { tip.hidden = !tip.hidden; return; }
+    promptEvent.prompt();
+    await promptEvent.userChoice;
+    promptEvent = null;
+    btn.hidden = true;
+  });
+  if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+})();
+</script>
+</body>
+</html>

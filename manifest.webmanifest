@@ -1,0 +1,52 @@
+{
+  "id": "./",
+  "name": "X-Auto Story Generator",
+  "short_name": "X-Auto Story",
+  "description": "Answer 8 questions and name your characters, get a story from your AI tool, then copy it scene by scene for your voice-over.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#E8EFE9",
+  "theme_color": "#12302B",
+  "categories": [
+    "productivity",
+    "entertainment"
+  ],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/wide.png",
+      "sizes": "1280x800",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "One question at a time"
+    },
+    {
+      "src": "screenshots/narrow.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Your story, one box per scene"
+    }
+  ]
+}
